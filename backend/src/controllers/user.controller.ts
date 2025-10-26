@@ -4,6 +4,7 @@ import ApiError from "../utils/apiError";
 import ApiResponse from "../utils/apiRespose";
 import mongoose from "mongoose";
 import jwt, { Secret } from "jsonwebtoken";
+import { removeFromCloudinary, uploadOnCloudinary } from "../utils/imageUpload";
 
 const accessCookieOptions = {
   httpOnly: true,
@@ -201,10 +202,68 @@ const changeCurrentPassword = asyncHandler(async (req: any, res: any) => {
     .json(new ApiResponse(200, "Password changed successfully"));
 });
 
+const getUser = asyncHandler(async (req: any, res: any) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "got user successfully", req.user));
+});
+
+const updateUserInfo = asyncHandler(async (req: any, res: any) => {
+  const { bio, links, fullName } = req.body;
+  const updateFields: Record<string, any> = {};
+
+  if (bio !== undefined) updateFields.bio = bio;
+  if (links !== undefined) updateFields.links = links;
+  if (fullName !== undefined) updateFields.fullName = fullName;
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updateFields },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User info updated successfully", user));
+});
+
+const updateAvatar = asyncHandler(async (req: any, res: any) => {
+  const localPath = req.file?.path;
+  if (!localPath) {
+    throw new ApiError(400, "Avatar file is needed");
+  }
+  const avatar = await uploadOnCloudinary(localPath);
+  if (!avatar) {
+    throw new ApiError(
+      500,
+      "Something went wrong while uploading image on server"
+    );
+  }
+  if (req.user.avatar) {
+    await removeFromCloudinary(req.user.avatar);
+  }
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        avatar: avatar.url,
+      },
+    },
+    { new: true }
+  );
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Avatar updated successfully", avatar.url));
+});
+
 export {
   registerUser,
   loginUser,
   logoutUser,
   refreshAccessToken,
   changeCurrentPassword,
+  getUser,
+  updateUserInfo,
+  updateAvatar,
 };

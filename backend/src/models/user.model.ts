@@ -52,6 +52,8 @@ const userSchema = new Schema<IUser>(
     },
     avatar: {
       type: String,
+      default: "",
+      trim: true,
     },
     password: {
       type: String,
