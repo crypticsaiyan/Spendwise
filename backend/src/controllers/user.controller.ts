@@ -20,6 +20,13 @@ const refreshCookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
+const deleteCookieOptions = {
+  httpOnly: true,
+  signed: true,
+  secure: true,
+  sameSite: "strict",
+};
+
 const generateTokens = async (userId: mongoose.Types.ObjectId) => {
   try {
     const user = await User.findById(userId);
@@ -107,4 +114,24 @@ const loginUser = asyncHandler(async (req: any, res: any) => {
     );
 });
 
-export { registerUser, loginUser };
+const logoutUser = asyncHandler(async (req: any, res: any) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: {
+        refreshToken: 1,
+      },
+    },
+    {
+      new: true, // return the updated doc
+    }
+  );
+
+  return res
+    .status(200)
+    .clearCookie("refreshToken", deleteCookieOptions)
+    .clearCookie("accessToken", deleteCookieOptions)
+    .json(new ApiResponse(200, "Logged out successfully"));
+});
+
+export { registerUser, loginUser, logoutUser };
