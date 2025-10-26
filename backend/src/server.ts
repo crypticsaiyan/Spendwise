@@ -18,6 +18,7 @@ const connectServer = async () => {
     }
   } catch (error) {
     console.log("Error connecting to DB: ", error);
+    process.exit(1);
   }
 };
 
