@@ -1,6 +1,13 @@
 import mongoose, { Schema, HydratedDocument } from "mongoose";
 import bcrypt from "bcrypt";
-import jwt, { SignOptions } from "jsonwebtoken";
+import jwt, { SignOptions, JwtPayload } from "jsonwebtoken";
+
+interface DecodedToken extends JwtPayload {
+  _id: string;
+  email: string;
+  username: string;
+  fullName: string;
+}
 
 export interface IUser {
   username: string;
@@ -114,3 +121,5 @@ userSchema.methods.generateRefreshToken = function () {
 };
 
 export const User = mongoose.model<IUser>("User", userSchema);
+
+export { DecodedToken };

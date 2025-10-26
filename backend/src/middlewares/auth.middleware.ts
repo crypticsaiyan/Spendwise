@@ -1,14 +1,7 @@
 import ApiError from "../utils/apiError";
 import asyncHandler from "../utils/asyncHandler";
 import jwt, { Secret, JwtPayload } from "jsonwebtoken";
-import { User } from "../models/user.model";
-
-interface DecodedToken extends JwtPayload {
-  _id: string;
-  email: string;
-  username: string;
-  fullName: string;
-}
+import { User, DecodedToken } from "../models/user.model";
 
 const verifyJwt = asyncHandler(async (req: any, res: any, next: any) => {
   try {
@@ -26,7 +19,7 @@ const verifyJwt = asyncHandler(async (req: any, res: any, next: any) => {
     ) as DecodedToken;
 
     if (!decodedToken) {
-      throw new ApiError(500, "Could not decode access token");
+      throw new ApiError(401, "Could not decode access token");
     }
 
     const user = await User.findById(decodedToken._id).select(
@@ -36,7 +29,7 @@ const verifyJwt = asyncHandler(async (req: any, res: any, next: any) => {
     if (!user) {
       throw new ApiError(401, "Invalid access token");
     }
-
+    // console.log(user);
     req.user = user;
     next();
   } catch (error: any) {
