@@ -30,42 +30,55 @@ import {
   getExploreFeed,
 } from "../controllers/post.controller";
 
+import {
+  createComment,
+  getCommentsForPost,
+  deleteComment,
+  updateComment,
+} from "../controllers/comment.controller";
+
 const router = Router();
 
 // Auth routes
-router.route("/register").post(registerUser);
-router.route("/login").post(loginUser);
-router.route("/logout").post(verifyJwt, logoutUser);
-router.route("/refreshToken").post(verifyJwt, refreshAccessToken);
-router.route("/changePassword").post(verifyJwt, changeCurrentPassword);
+router.route("/auth/register").post(registerUser);
+router.route("/auth/login").post(loginUser);
+router.route("/auth/logout").post(verifyJwt, logoutUser);
+router.route("/auth/refreshToken").post(verifyJwt, refreshAccessToken);
+router.route("/auth/changePassword").post(verifyJwt, changeCurrentPassword);
 
 // User routes
 
 // Private
-router.route("/getUser").get(verifyJwt, getUser);
-router.route("/updateUserInfo").post(verifyJwt, updateUserInfo);
+router.route("/users/me").get(verifyJwt, getUser);
+router.route("/users/me").put(verifyJwt, updateUserInfo);
 router
-  .route("/updateUserAvatar")
+  .route("/users/avatar")
   .patch(verifyJwt, upload.single("avatar"), updateAvatar);
-router.route("/follow/:username").post(verifyJwt, toggleFollow);
-router.route("/getBookmarks").get(verifyJwt, getBookmarkedPosts);
-router.route("/bookmark/:postId").post(verifyJwt, toggleBookmark);
-
+router.route("/users/:username/follow").post(verifyJwt, toggleFollow);
+router.route("/users/me/bookmarks").get(verifyJwt, getBookmarkedPosts);
+router.route("/users/bookmark/:postId").post(verifyJwt, toggleBookmark);
 // Public
-router.route("/public/:username").get(getUserProfile);
-router.route("/public/:username/followers").get(getUserFollowers);
-router.route("/public/:username/following").get(getUserFollowing);
+router.route("/users/:username").get(getUserProfile);
+router.route("/users/:username/followers").get(getUserFollowers);
+router.route("/users/:username/following").get(getUserFollowing);
 
 // Post routes
 
 // Private
-router.route("/post").post(verifyJwt, upload.single("image"), createPost);
-router.route("/deletePost/:postId").delete(verifyJwt, deletePost);
-router.route("/updatePost/:postId").patch(verifyJwt, updatePost);
-router.route("/feed").get(verifyJwt, getFeed);
-router.route("/explore").get(verifyJwt, getExploreFeed);
-
+router.route("/posts").post(verifyJwt, upload.single("image"), createPost);
+router.route("/posts/:postId").delete(verifyJwt, deletePost);
+router.route("/posts/:postId").put(verifyJwt, updatePost);
+router.route("/posts/feed").get(verifyJwt, getFeed);
+router.route("/posts/explore").get(verifyJwt, getExploreFeed);
 // Public
 router.route("/posts/:postId").get(getPostById);
+
+// Comment routes
+// Private
+router.route("/posts/:postId/comments").post(verifyJwt, createComment);
+router.route("/comments/:commentId").delete(verifyJwt, deleteComment);
+router.route("/comments/:commentId").put(verifyJwt, updateComment);
+// Public
+router.route("/posts/:postId/comments").get(getCommentsForPost);
 
 export default router;

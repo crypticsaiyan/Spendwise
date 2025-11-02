@@ -19,6 +19,6 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-app.use("/api/v1/users", router);
+app.use("/api/v1", router);
 
 export default app;
