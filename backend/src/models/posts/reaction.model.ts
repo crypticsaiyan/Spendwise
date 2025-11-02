@@ -18,10 +18,10 @@ const reactionSchema = new Schema(
       refPath: "reactionTo", // tells mongoose to look for the value of reactionTo
     },
     reactionType: {
-      // 1 -> like, 0 -> dislike
-      type: Boolean,
+      type: String,
+      enum: ["like", "dislike"],
       required: true,
-      default: 1,
+      default: "like",
     },
   },
   { timestamps: true }

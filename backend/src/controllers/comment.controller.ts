@@ -74,7 +74,8 @@ const getCommentsForPost = asyncHandler(async (req: any, res: any) => {
       $project: {
         content: 1,
         createdAt: 1,
-
+        likeCount: 1,
+        dislikeCount: 1,
         author: {
           username: "$authorInfo.username",
           fullName: "$authorInfo.fullName",
@@ -131,7 +132,7 @@ const updateComment = asyncHandler(async (req: any, res: any) => {
   if (!comment) {
     throw new ApiError(404, "Comment not found");
   }
-  
+
   if (comment.authorId.toString() !== req.user._id.toString()) {
     throw new ApiError(403, "Not Allowed");
   }

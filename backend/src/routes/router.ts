@@ -37,6 +37,8 @@ import {
   updateComment,
 } from "../controllers/comment.controller";
 
+import { toggleReaction } from "../controllers/reaction.controller";
+
 const router = Router();
 
 // Auth routes
@@ -80,5 +82,8 @@ router.route("/comments/:commentId").delete(verifyJwt, deleteComment);
 router.route("/comments/:commentId").put(verifyJwt, updateComment);
 // Public
 router.route("/posts/:postId/comments").get(getCommentsForPost);
+
+// Reaction
+router.route("/react").post(verifyJwt, toggleReaction);
 
 export default router;
