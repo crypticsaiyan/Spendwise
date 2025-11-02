@@ -1,211 +1,47 @@
-import { User, DecodedToken } from "../models/user.model";
 import asyncHandler from "../utils/asyncHandler";
 import ApiError from "../utils/apiError";
 import ApiResponse from "../utils/apiRespose";
 import mongoose from "mongoose";
-import jwt, { Secret } from "jsonwebtoken";
 import { removeFromCloudinary, uploadOnCloudinary } from "../utils/imageUpload";
-
-const accessCookieOptions = {
-  httpOnly: true,
-  secure: true,
-  sameSite: "strict",
-  signed: true,
-  maxAge: 15 * 60 * 1000, // 15 minutes
-};
-
-const refreshCookieOptions = {
-  httpOnly: true,
-  secure: true,
-  sameSite: "strict",
-  signed: true,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-};
-
-const deleteCookieOptions = {
-  httpOnly: true,
-  signed: true,
-  secure: true,
-  sameSite: "strict",
-};
-
-const generateTokens = async (userId: mongoose.Types.ObjectId) => {
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new ApiError(401, "User does not exist");
-    }
-    const accessToken: string = user.generateAccessToken();
-    const refreshToken: string = user.generateRefreshToken();
-    user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false }); // skip schema validation, only new field written to db
-    return { accessToken, refreshToken };
-  } catch (error: any) {
-    throw new ApiError(500, error.message);
-  }
-};
-
-const registerUser = asyncHandler(async (req: any, res: any) => {
-  //fetch the data from req body
-  const { username, fullName, email, password } = req.body;
-  [username, fullName, email, password].forEach((element) => {
-    if (!element || element.trim() === "") {
-      throw new ApiError(400, "All fields are required");
-    }
-  });
-
-  //check if user already exists
-  if (await User.findOne({ $or: [{ email }, { username }] })) {
-    throw new ApiError(409, "User with given email or username already exists");
-  }
-
-  //create user
-  const user = await User.create({
-    username: username.trim().toLowerCase(),
-    fullName: fullName.trim(),
-    email: email.trim().toLowerCase(),
-    password: password.trim(),
-  });
-
-  const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken"
-  );
-  if (!createdUser) {
-    throw new ApiError(500, "Error creating user");
-  }
-
-  return res
-    .status(201)
-    .json(new ApiResponse(200, "User registered successfully", createdUser));
-});
-
-const loginUser = asyncHandler(async (req: any, res: any) => {
-  const { username, email, password } = req.body; // enter email or username to login
-  if (!username && !email) {
-    throw new ApiError(400, "Please provide username or email");
-  }
-  if (!password) {
-    throw new ApiError(400, "Password needed!");
-  }
-
-  const requestedUser = await User.findOne({ $or: [{ username }, { email }] });
-  if (!requestedUser) {
-    throw new ApiError(400, "User does not exist! Register first");
-  }
-
-  const isPassCorrect = await requestedUser.isPasswordCorrect(password);
-  if (!isPassCorrect) {
-    throw new ApiError(401, "Wrong password");
-  }
-
-  const { accessToken, refreshToken } = await generateTokens(requestedUser._id);
-  const loggedInUser = await User.findById(requestedUser._id).select(
-    "-password -refreshToken"
-  );
-
-  return res
-    .status(200)
-    .cookie("refreshToken", refreshToken, refreshCookieOptions)
-    .cookie("accessToken", accessToken, accessCookieOptions)
-    .json(
-      new ApiResponse(200, "Logged in Successfully", {
-        user: loggedInUser,
-        accessToken,
-        refreshToken,
-      })
-    );
-});
-
-const logoutUser = asyncHandler(async (req: any, res: any) => {
-  await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      $unset: {
-        refreshToken: 1,
-      },
-    },
-    {
-      new: true, // return the updated doc
-    }
-  );
-
-  return res
-    .status(200)
-    .clearCookie("refreshToken", deleteCookieOptions)
-    .clearCookie("accessToken", deleteCookieOptions)
-    .json(new ApiResponse(200, "Logged out successfully"));
-});
-
-const refreshAccessToken = asyncHandler(async (req: any, res: any) => {
-  try {
-    const incomingRefreshToken =
-      req.signedCookies.refreshToken || req.body.refreshToken;
-    if (!incomingRefreshToken) {
-      throw new ApiError(401, "Unauthorized request");
-    }
-    const decodedRefreshToken = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET as Secret
-    ) as DecodedToken;
-
-    const user = await User.findById(decodedRefreshToken._id);
-    if (!user) {
-      throw new ApiError(401, "Invalid refresh Token");
-    }
-
-    if (user.refreshToken !== incomingRefreshToken) {
-      throw new ApiError(401, "Refresh Token is expired");
-    }
-
-    const { accessToken, refreshToken } = await generateTokens(user._id);
-
-    return res
-      .status(200)
-      .cookie("accessToken", accessToken, accessCookieOptions)
-      .cookie("refreshToken", refreshToken, refreshCookieOptions)
-      .json(
-        new ApiResponse(200, "Access Token refreshed successfully", {
-          accessToken,
-          refreshToken,
-        })
-      );
-  } catch (error: any) {
-    throw new ApiError(401, error?.message || "Unable to refresh access token");
-  }
-});
-
-const changeCurrentPassword = asyncHandler(async (req: any, res: any) => {
-  const { oldPassword, newPassword, confirmPassword } = req.body;
-  if (!oldPassword || !newPassword || !confirmPassword) {
-    throw new ApiError(400, "All password fields are required");
-  }
-
-  if (newPassword !== confirmPassword) {
-    throw new ApiError(400, "New password and confirm password must match");
-  }
-
-  const user = await User.findById(req.user?._id);
-  if (!user) {
-    throw new ApiError(401, "User not authenticated");
-  }
-
-  const isOldPasswordCorrect = await user.isPasswordCorrect(oldPassword);
-  if (!isOldPasswordCorrect) {
-    throw new ApiError(400, "Incorrect old password");
-  }
-
-  user.password = newPassword;
-  await user.save({ validateBeforeSave: false });
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, "Password changed successfully"));
-});
+import { Follow } from "../models/follow.model";
+import { User } from "../models/user.model";
+import { Post } from "../models/posts/post.model";
+import { Bookmark } from "../models/posts/bookmark.model";
 
 const getUser = asyncHandler(async (req: any, res: any) => {
   return res
     .status(200)
     .json(new ApiResponse(200, "got user successfully", req.user));
+});
+
+const getUserProfile = asyncHandler(async (req: any, res: any) => {
+  const { username } = req.params;
+  const user = await User.findOne({ username }).select(
+    "-email -password -refreshToken"
+  );
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const posts = await Post.find({ authorId: user._id }).sort({
+    createdAt: -1,
+  });
+  const publicProfile = {
+    username: user.username,
+    fullName: user.fullName,
+    avatar: user.avatar,
+    bio: user.bio,
+    links: user.links,
+    followerCount: user.followerCount,
+    followingCount: user.followingCount,
+    postsCount: user.postsCount,
+  };
+  return res.status(200).json(
+    new ApiResponse(200, "User Profile fetched successfully", {
+      user: publicProfile,
+      posts: posts,
+    })
+  );
 });
 
 const updateUserInfo = asyncHandler(async (req: any, res: any) => {
@@ -257,13 +93,172 @@ const updateAvatar = asyncHandler(async (req: any, res: any) => {
     .json(new ApiResponse(200, "Avatar updated successfully", avatar.url));
 });
 
+// Get user followers
+const getUserFollowers = asyncHandler(async (req: any, res: any) => {
+  const { username } = req.params;
+  const user = await User.findOne({ username });
+
+  if (!user) {
+    throw new ApiError(400, "Invalid username");
+  }
+
+  const followers = await Follow.find({ followingId: user._id })
+    .populate({
+      path: "followerId",
+      select: "username fullName avatar bio -_id",
+    })
+    .select("followerId createdAt");
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      "Followers retrieved successfully",
+      followers.map((f) => f.followerId)
+    )
+  );
+});
+
+// Get user following
+const getUserFollowing = asyncHandler(async (req: any, res: any) => {
+  const { username } = req.params;
+  const user = await User.findOne({ username });
+
+  if (!user) {
+    throw new ApiError(400, "Valid user ID is required");
+  }
+
+  const following = await Follow.find({ followerId: user._id })
+    .populate({
+      path: "followingId",
+      select: "username fullName avatar bio -_id",
+    })
+    .select("followingId createdAt");
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      "Following retrieved successfully",
+      following.map((f) => f.followingId)
+    )
+  );
+});
+
+const toggleFollow = asyncHandler(async (req: any, res: any) => {
+  const { username } = req.params;
+  const currentUserId = req.user._id;
+
+  const targetUser = await User.findOne({ username });
+  const userId = targetUser?._id;
+
+  if (!targetUser) {
+    throw new ApiError(404, "User not found");
+  }
+  if (userId?.toString() === currentUserId.toString()) {
+    throw new ApiError(400, "You cannot follow yourself");
+  }
+
+  // Check if follow relationship exists
+  const existingFollow = await Follow.findOne({
+    followerId: currentUserId,
+    followingId: userId,
+  });
+
+  if (existingFollow) {
+    // Unfollow: Delete the follow document
+    await Follow.deleteOne({ _id: existingFollow._id });
+
+    // Decrement counts
+    await User.findByIdAndUpdate(userId, { $inc: { followerCount: -1 } });
+    await User.findByIdAndUpdate(currentUserId, {
+      $inc: { followingCount: -1 },
+    });
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, "Unfollowed successfully", { following: false })
+      );
+  } else {
+    // Follow: Create the follow document
+    await Follow.create({
+      followerId: currentUserId,
+      followingId: userId,
+    });
+
+    // Increment counts
+    await User.findByIdAndUpdate(userId, { $inc: { followerCount: 1 } });
+    await User.findByIdAndUpdate(currentUserId, {
+      $inc: { followingCount: 1 },
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "Followed successfully", { following: true }));
+  }
+});
+
+const toggleBookmark = asyncHandler(async (req: any, res: any) => {
+  const { postId } = req.params;
+  const post = await Post.findById(postId);
+  if (!post) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  const userId = req.user._id;
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  const existingBookmark = await Bookmark.findOne({
+    userId,
+    postId,
+  });
+
+  if (existingBookmark) {
+    await Bookmark.deleteOne({ _id: existingBookmark._id });
+
+    await User.findByIdAndUpdate(userId, { $inc: { bookmarkCount: -1 } });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "UnBookmarked Successfully"));
+  } else {
+    await Bookmark.create({
+      userId,
+      postId,
+    });
+
+    await User.findByIdAndUpdate(userId, { $inc: { bookmarkCount: 1 } });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "Bookmarked Successfully"));
+  }
+});
+
+const getBookmarkedPosts = asyncHandler(async (req: any, res: any) => {
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  const bookmarks = await Bookmark.find({
+    userId: req.user._id,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Bookmarks fetched successfully", bookmarks));
+});
+
 export {
-  registerUser,
-  loginUser,
-  logoutUser,
-  refreshAccessToken,
-  changeCurrentPassword,
   getUser,
   updateUserInfo,
   updateAvatar,
+  getUserProfile,
+  getUserFollowers,
+  getUserFollowing,
+  toggleFollow,
+  toggleBookmark,
+  getBookmarkedPosts
 };

@@ -21,6 +21,9 @@ export interface IUser {
   followingCount: number;
   postsCount: number;
   refreshToken?: string;
+  bookmarkCount: number;
+  createdAt?: Date;
+  updatedAt?: Date;
   isPasswordCorrect(password: string): Promise<boolean>;
   generateAccessToken(): string;
   generateRefreshToken(): string;
@@ -77,6 +80,10 @@ const userSchema = new Schema<IUser>(
       default: 0,
     },
     postsCount: {
+      type: Number,
+      default: 0,
+    },
+    bookmarkCount: {
       type: Number,
       default: 0,
     },
