@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const postSchema = new Schema(
   {
@@ -17,26 +18,26 @@ const postSchema = new Schema(
       trim: true,
       default: "",
     },
+    imageUrl: { type: String },
     category: {
       type: String,
       enum: ["article", "code", "repo"],
       required: true,
     },
     // Only for 'article' posts
-    articleDetails: {
+    article: {
       content: { type: String },
     },
 
     // Only for 'code' posts
-    codeDetails: {
+    code: {
       language: { type: String },
       codeBlock: { type: String },
     },
 
     // Only for 'repo' posts
-    repoDetails: {
+    repo: {
       repoUrl: { type: String },
-      imageUrl: { type: String },
     },
     techStack: {
       type: [String],
@@ -57,5 +58,7 @@ const postSchema = new Schema(
   },
   { timestamps: true }
 );
+
+postSchema.plugin(mongooseAggregatePaginate);
 
 export const Post = mongoose.model("Post", postSchema);
